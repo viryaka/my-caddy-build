@@ -1,7 +1,6 @@
 name: Build Caddy with Naive & L4 & Cloudflare
 on:
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -9,35 +8,52 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: 'stable'
           check-latest: true
-
+      
       - name: Install xcaddy
         run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-
+      
       - name: Build Caddy
         run: |
           $(go env GOPATH)/bin/xcaddy build \
             --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
-            --with github.com/mholt/caddy-l4 \
+            --with github.com/mholt/caddy-l4@master \
             --with github.com/caddy-dns/cloudflare \
             --output caddy-linux-amd64
-
-      - name: Verify Plugins (Critical)
+      
+      - name: Verify Plugins
         run: |
           chmod +x caddy-linux-amd64
-          echo "Checking for Layer4 module..."
-          ./caddy-linux-amd64 list-modules | grep layer4
+          echo "=== All Loaded Modules ==="
+          ./caddy-linux-amd64 list-modules
           
-          echo "Checking for ForwardProxy module..."
-          # 修正点：加了下划线 forward_proxy
-          ./caddy-linux-amd64 list-modules | grep forward_proxy
+          echo -e "\n=== Checking Layer4 Module ==="
+          if ./caddy-linux-amd64 list-modules | grep -i layer4; then
+            echo "✓ Layer4 plugin found"
+          else
+            echo "✗ Layer4 plugin NOT found"
+            exit 1
+          fi
           
-          echo "Checking for Cloudflare DNS module..."
-          ./caddy-linux-amd64 list-modules | grep dns.providers.cloudflare
+          echo -e "\n=== Checking ForwardProxy Module ==="
+          if ./caddy-linux-amd64 list-modules | grep -E "http.handlers.forward_proxy|forwardproxy"; then
+            echo "✓ ForwardProxy plugin found"
+          else
+            echo "✗ ForwardProxy plugin NOT found"
+            exit 1
+          fi
           
-          echo "Verification Passed!"
-
+          echo -e "\n=== Checking Cloudflare DNS Module ==="
+          if ./caddy-linux-amd64 list-modules | grep "dns.providers.cloudflare"; then
+            echo "✓ Cloudflare DNS plugin found"
+          else
+            echo "✗ Cloudflare DNS plugin NOT found"
+            exit 1
+          fi
+          
+          echo -e "\n✓ All verifications passed!"
+      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
