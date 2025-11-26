@@ -1,0 +1,29 @@
+name: Build Caddy with Naive & L4
+on: 
+  workflow_dispatch: # 允许手动点击按钮触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install xcaddy
+        run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+      - name: Build Caddy
+        run: |
+          ~/go/bin/xcaddy build \
+            --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
+            --with github.com/mholt/caddy-l4 \
+            --with github.com/caddy-dns/cloudflare \
+            --output caddy-linux-amd64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: caddy-binary
+          path: caddy-linux-amd64
