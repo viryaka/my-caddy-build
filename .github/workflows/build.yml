@@ -1,30 +1,46 @@
-name: Build Caddy with Naive & L4
-on: 
-  workflow_dispatch: # 允许手动点击按钮触发
+name: Build Caddy with Naive & L4 & Cloudflare
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5  # 更新为 v5
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          # 修正 1: 这里改为 'stable' 或 '1.25'，对齐脚本中获取最新版的逻辑
+          go-version: 'stable'
+          check-latest: true
 
       - name: Install xcaddy
         run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
       - name: Build Caddy
         run: |
-          ~/go/bin/xcaddy build \
+          # 使用 xcaddy 编译，包含所有需要的插件
+          # 注意：虽然 buildcaddy.sh 只写了 forwardproxy，但我们需要额外加上 l4 和 dns
+          $(go env GOPATH)/bin/xcaddy build \
             --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
             --with github.com/mholt/caddy-l4 \
             --with github.com/caddy-dns/cloudflare \
             --output caddy-linux-amd64
 
+      # 修正 2: 新增验证步骤。如果这一步报错，说明编译失败，不要下载。
+      - name: Verify Plugins (Critical)
+        run: |
+          chmod +x caddy-linux-amd64
+          echo "Checking for Layer4 module..."
+          ./caddy-linux-amd64 list-modules | grep layer4
+          echo "Checking for ForwardProxy module..."
+          ./caddy-linux-amd64 list-modules | grep forwardproxy
+          echo "Checking for Cloudflare DNS module..."
+          ./caddy-linux-amd64 list-modules | grep dns.providers.cloudflare
+          echo "Verification Passed!"
+
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4  # 关键修改：更新为 v4
+        uses: actions/upload-artifact@v4
         with:
           name: caddy-binary
           path: caddy-linux-amd64
-          compression-level: 0 # 可选：不压缩，下载解压更快
+          compression-level: 0
